@@ -1,0 +1,58 @@
+# Variante de produção para VPS que JÁ TEM nginx + certbot no host.
+# Útil quando a mesma máquina serve vários sites — o nginx do host
+# vira reverse proxy de todos, e o app roda em container só no loopback.
+#
+# Uso:
+#   docker compose -f docker-compose.host.yml up -d --build
+#
+# Depois configure /etc/nginx/sites-available/<dominio>.conf apontando
+# para http://127.0.0.1:3000 e rode `sudo certbot --nginx -d <dominio>`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zux-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zux}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-zux_portal}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zux} -d ${POSTGRES_DB:-zux_portal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [zux-net]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zux-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zux}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zux_portal}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env}
+      AUTH_URL: ${AUTH_URL:?defina AUTH_URL no .env}
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: production
+      PONTO_JORNADA_DIARIA_MIN: ${PONTO_JORNADA_DIARIA_MIN:-480}
+      PONTO_TOLERANCIA_MIN: ${PONTO_TOLERANCIA_MIN:-10}
+      PONTO_ADICIONAL_HE: ${PONTO_ADICIONAL_HE:-0.5}
+      PONTO_ADICIONAL_HE_DSR: ${PONTO_ADICIONAL_HE_DSR:-1.0}
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-0}
+    ports:
+      - "127.0.0.1:3000:3000"   # somente loopback; nginx do host faz o proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [zux-net]
+
+volumes:
+  pg_data:
+
+networks:
+  zux-net:
+    driver: bridge
