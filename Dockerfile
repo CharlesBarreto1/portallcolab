@@ -12,7 +12,14 @@ RUN apk add --no-cache libc6-compat openssl
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 
-RUN npm ci
+# Usa `npm ci` se houver lockfile, senão `npm install` (gera o lock no container).
+# Após o primeiro build bem-sucedido, copie o package-lock.json gerado para o repo
+# e o build vai ser reproducível com npm ci.
+RUN if [ -f package-lock.json ]; then \
+      npm ci --no-audit --no-fund; \
+    else \
+      npm install --no-audit --no-fund; \
+    fi
 
 # ──────────────────────────────────────────────────────────────────
 # Stage 2: build
