@@ -44,7 +44,9 @@ services:
       PONTO_ADICIONAL_HE_DSR: ${PONTO_ADICIONAL_HE_DSR:-1.0}
       SEED_ON_BOOT: ${SEED_ON_BOOT:-0}
     ports:
-      - "127.0.0.1:3000:3000"   # somente loopback; nginx do host faz o proxy
+      # Porta do HOST (loopback) -> porta interna do app (3000).
+      # Customize via HOST_PORT no .env (default 3030) se 3000 estiver ocupada.
+      - "127.0.0.1:${HOST_PORT:-3030}:3000"
     depends_on:
       postgres:
         condition: service_healthy
