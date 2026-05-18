@@ -6,13 +6,15 @@ import { formatCPF } from "@/lib/utils";
 import { CheckCircle2, Loader2, UserCheck, UserX } from "lucide-react";
 import { aprovarUsuario, atualizarUsuario, definirStatus } from "./actions";
 
+type SystemRole = "COLABORADOR" | "GESTOR" | "RH" | "ADMIN";
+
 type UserRow = {
   id: string;
   name: string;
   email: string;
   cpf: string | null;
   status: string;
-  systemRole: string;
+  systemRole: SystemRole;
   jobRoleId: string | null;
   jobRoleName: string | null;
   departmentId: string | null;
@@ -98,7 +100,7 @@ function UsuarioRow({
   const [editing, setEditing] = useState(user.status === "PENDENTE");
   const [jobRoleId, setJobRoleId] = useState(user.jobRoleId ?? "");
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? "");
-  const [systemRole, setSystemRole] = useState(user.systemRole);
+  const [systemRole, setSystemRole] = useState<SystemRole>(user.systemRole);
   const [isPending, startTransition] = useTransition();
 
   function handleApprove() {
@@ -170,7 +172,7 @@ function UsuarioRow({
       </td>
       <td className="py-3 px-4">
         {editing ? (
-          <select className="input py-1" value={systemRole} onChange={(e) => setSystemRole(e.target.value)}>
+          <select className="input py-1" value={systemRole} onChange={(e) => setSystemRole(e.target.value as SystemRole)}>
             <option value="COLABORADOR">Colaborador</option>
             <option value="GESTOR">Gestor</option>
             <option value="RH">RH</option>
