@@ -1,5 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { LoginForm } from "./login-form";
+
+// useSearchParams precisa rodar do lado do cliente; forçamos dynamic.
+export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
@@ -15,7 +19,9 @@ export default function LoginPage() {
         Use o e-mail cadastrado para acessar o portal.
       </p>
       <div className="mt-8">
-        <LoginForm />
+        <Suspense fallback={<div className="h-40" />}>
+          <LoginForm />
+        </Suspense>
       </div>
       <p className="mt-6 text-center text-sm text-gray-600">
         Ainda não tem conta?{" "}
