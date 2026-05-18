@@ -16,17 +16,10 @@ declare module "next-auth" {
       jobRoleName: string | null;
     } & DefaultSession["user"];
   }
-}
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id: string;
-    systemRole: string;
-    status: string;
-    permissions: string[];
-    jobRoleId: string | null;
-    jobRoleName: string | null;
-  }
+  // Em Auth.js v5 a JWT pode ser augmentada via interface User também,
+  // mas para os campos extras que persistimos no token, basta tipar
+  // localmente nos callbacks. Mantemos a forma simples e cast onde precisa.
 }
 
 const credentialsSchema = z.object({
@@ -96,23 +89,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           jobRoleId: string | null;
           jobRoleName: string | null;
         };
-        token.id = u.id as string;
-        token.systemRole = u.systemRole;
-        token.status = u.status;
-        token.permissions = u.permissions;
-        token.jobRoleId = u.jobRoleId;
-        token.jobRoleName = u.jobRoleName;
+        // O JWT da Auth.js v5 e indexavel; gravamos campos extras
+        // diretamente como propriedades do token.
+        const t = token as Record<string, unknown>;
+        t.id = u.id as string;
+        t.systemRole = u.systemRole;
+        t.status = u.status;
+        t.permissions = u.permissions;
+        t.jobRoleId = u.jobRoleId;
+        t.jobRoleName = u.jobRoleName;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id;
-        session.user.systemRole = token.systemRole;
-        session.user.status = token.status;
-        session.user.permissions = token.permissions;
-        session.user.jobRoleId = token.jobRoleId;
-        session.user.jobRoleName = token.jobRoleName;
+        const t = token as Record<string, unknown>;
+        session.user.id = t.id as string;
+        session.user.systemRole = t.systemRole as string;
+        session.user.status = t.status as string;
+        session.user.permissions = (t.permissions as string[]) ?? [];
+        session.user.jobRoleId = (t.jobRoleId as string | null) ?? null;
+        session.user.jobRoleName = (t.jobRoleName as string | null) ?? null;
       }
       return session;
     },
