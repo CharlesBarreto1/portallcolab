@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zux-portal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zux
+      POSTGRES_PASSWORD: zux
+      POSTGRES_DB: zux_portal
+    ports:
+      - "5432:5432"
+    volumes:
+      - zux_pg_data:/var/lib/postgresql/data
+
+volumes:
+  zux_pg_data:

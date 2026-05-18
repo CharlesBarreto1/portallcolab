@@ -1,0 +1,223 @@
+// Schema do Zux Portal
+// Single-tenant agora; refatorar para multi-tenant adicionando companyId nas tabelas relevantes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Autenticação, usuários e permissões
+// ============================================================
+
+enum UserStatus {
+  PENDENTE   // cadastrou-se, aguardando aprovação do admin
+  ATIVO
+  INATIVO
+  BLOQUEADO
+}
+
+enum SystemRole {
+  COLABORADOR
+  GESTOR
+  RH
+  ADMIN
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  password        String
+  name            String
+  cpf             String?    @unique
+  phone           String?
+  birthDate       DateTime?
+  hireDate        DateTime?
+  avatarUrl       String?
+
+  status          UserStatus @default(PENDENTE)
+  systemRole      SystemRole @default(COLABORADOR)
+
+  // Cargo customizado (criado pelo admin)
+  jobRoleId       String?
+  jobRole         JobRole?   @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Configuração de jornada (em minutos) — null = usa padrão da empresa
+  dailyMinutes    Int?
+  weeklyMinutes   Int?
+
+  approvedAt      DateTime?
+  approvedById    String?
+  approvedBy      User?      @relation("UserApprovals", fields: [approvedById], references: [id])
+  approvedUsers   User[]     @relation("UserApprovals")
+
+  timeEntries     TimeEntry[]
+  workSchedules   WorkSchedule[]
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([status])
+  @@index([systemRole])
+}
+
+model JobRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Permission[]  @relation("JobRolePermissions")
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Permissões granulares — cada cargo pode ter várias
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique  // ex: "ponto.view_all", "rh.upload", "documentos.manage"
+  label       String
+  description String?
+  module      String   // "ponto" | "rh" | "faculdade" | "novidades" | "documentos" | "admin"
+  jobRoles    JobRole[] @relation("JobRolePermissions")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// Ponto eletrônico
+// ============================================================
+
+enum TimeEntryType {
+  ENTRADA
+  SAIDA_INTERVALO
+  RETORNO_INTERVALO
+  SAIDA
+}
+
+enum TimeEntrySource {
+  WEB
+  MOBILE
+  IMPORTACAO
+  AJUSTE_MANUAL
+}
+
+model TimeEntry {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  timestamp   DateTime
+  type        TimeEntryType
+  source      TimeEntrySource @default(WEB)
+
+  ipAddress   String?
+  userAgent   String?
+  latitude    Float?
+  longitude   Float?
+
+  // Para ajustes manuais
+  note        String?
+  adjustedById String?
+  adjustedAt  DateTime?
+
+  createdAt   DateTime        @default(now())
+
+  @@index([userId, timestamp])
+  @@index([timestamp])
+}
+
+// Jornada de trabalho do colaborador (escala)
+model WorkSchedule {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Bitmap dos dias da semana: 0=domingo ... 6=sábado
+  monday        Boolean  @default(true)
+  tuesday       Boolean  @default(true)
+  wednesday     Boolean  @default(true)
+  thursday      Boolean  @default(true)
+  friday        Boolean  @default(true)
+  saturday      Boolean  @default(false)
+  sunday        Boolean  @default(false)
+
+  startTime     String   @default("08:00")  // HH:mm
+  endTime       String   @default("18:00")
+  breakMinutes  Int      @default(60)
+
+  validFrom     DateTime @default(now())
+  validUntil    DateTime?
+
+  @@index([userId])
+}
+
+// Feriados nacionais/empresa (afeta cálculo de HE — domingo/feriado tem adicional 100%)
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  national  Boolean  @default(true)
+}
+
+// ============================================================
+// Stubs para módulos futuros — schema já preparado
+// ============================================================
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  pinned    Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  path        String   // caminho lógico (pastas separadas por /)
+  mimeType    String
+  size        Int
+  storageKey  String   // chave no storage (S3/local)
+  ownerId     String?  // quando é doc de um colaborador específico
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([path])
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  thumbnailUrl String?
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model NewsPost {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  content   String
+  cover     String?
+  authorId  String
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

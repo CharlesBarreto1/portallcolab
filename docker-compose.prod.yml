@@ -1,0 +1,76 @@
+# Compose de produção — VPS
+# Subir com: docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zux-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zux}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-zux_portal}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zux} -d ${POSTGRES_DB:-zux_portal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [zux-net]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zux-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zux}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zux_portal}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env}
+      AUTH_URL: ${AUTH_URL:?defina AUTH_URL no .env}
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: production
+      PONTO_JORNADA_DIARIA_MIN: ${PONTO_JORNADA_DIARIA_MIN:-480}
+      PONTO_TOLERANCIA_MIN: ${PONTO_TOLERANCIA_MIN:-10}
+      PONTO_ADICIONAL_HE: ${PONTO_ADICIONAL_HE:-0.5}
+      PONTO_ADICIONAL_HE_DSR: ${PONTO_ADICIONAL_HE_DSR:-1.0}
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [zux-net]
+    # Expomos só para o nginx (rede interna). Sem ports: para não vazar.
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: zux-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks: [zux-net]
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: zux-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Renova a cada 12h se vencer em menos de 30 dias
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done'
+    networks: [zux-net]
+
+volumes:
+  pg_data:
+
+networks:
+  zux-net:
+    driver: bridge

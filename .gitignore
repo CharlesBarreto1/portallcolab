@@ -1,0 +1,19 @@
+node_modules
+.next
+out
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+.vscode
+.idea
+coverage
+dist
+build
+prisma/migrations/dev.db*
+
+# Deploy / Nginx / Certbot — gerados na VPS, NÃO commitar
+nginx/conf.d/zux.conf
+certbot/
+*.bak
